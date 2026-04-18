@@ -6,33 +6,52 @@ import plotly.express as px
 st.set_page_config(page_title="Kurs ishi | Dashboard", layout="wide")
 
 st.title("🚀 Ma'lumotlar Tahlili Veb-ilovasi")
-st.sidebar.header("Sozlamalar")
 
-# Ma'lumotni yuklash funksiyasi
 @st.cache_data
 def load_data():
-    return pd.read_csv('combined_data.csv')
+    # Faylni yuklaymiz
+    df = pd.read_csv('combined_data.csv')
+    # Agar 'length' ustuni bo'lmasa, uni yaratib olamiz (tahlil uchun kerak)
+    if 'length' not in df.columns and 'message' in df.columns:
+        df['length'] = df['message'].astype(str).apply(len)
+    return df
 
 try:
     data = load_data()
-    
-    # Ma'lumotlar haqida qisqacha statistika
-    st.write("### Ma'lumotlar jadvali (dastlabki 10 ta qator)")
+
+    # 1. Ma'lumotlar jadvali
+    st.write("### 📋 Ma'lumotlar jadvali")
     st.dataframe(data.head(10))
 
-    # Grafik yaratish bo'limi
-    st.write("### Vizual tahlil")
-    numeric_cols = data.select_dtypes(include=['float64', 'int64']).columns.tolist()
-    
-    if numeric_cols:
-        x_axis = st.sidebar.selectbox("X o'qi uchun ustunni tanlang:", numeric_cols)
-        y_axis = st.sidebar.selectbox("Y o'qi uchun ustunni tanlang:", numeric_cols)
-        
-        fig = px.scatter(data, x=x_axis, y=y_axis, color_continuous_scale='Viridis',
-                         title=f"{x_axis} va {y_axis} o'rtasidagi bog'liqlik")
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.warning("Grafik chizish uchun raqamli ustunlar topilmadi.")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # 2. Gistogramma (Shamol tezligi prognozi kabi ko'rinadi)
+        st.write("### 📊 Xabarlar uzunligi taqsimoti")
+        if 'length' in data.columns:
+            fig1 = px.histogram(data, x="length", color="label", 
+                                 nbins=30, color_discrete_sequence=['#FF4B4B', '#00CC96'],
+                                 title="Xabarlar uzunligi gistogrammasi")
+            st.plotly_chart(fig1, use_container_width=True)
+
+    with col2:
+        # 3. Doiraviy diagramma (Pie chart)
+        st.write("### 🍩 Xabarlar turlari ulushi")
+        if 'label' in data.columns:
+            label_counts = data['label'].value_counts().reset_index()
+            label_counts.columns = ['Tur', 'Soni']
+            fig2 = px.pie(label_counts, names='Tur', values='Soni', hole=0.4,
+                          color_discrete_sequence=px.colors.sequential.RdBu,
+                          title="Spam va Oddiy xabarlar nisbati")
+            st.plotly_chart(fig2, use_container_width=True)
+
+    # Sidebar uchun qo'shimcha filtrlar
+    st.sidebar.header("Qidiruv")
+    search = st.sidebar.text_input("Xabarlarni qidirish:")
+    if search:
+        filtered_data = data[data['message'].str.contains(search, case=False, na=False)]
+        st.write(f"Topilgan natijalar: {len(filtered_data)}")
+        st.dataframe(filtered_data)
 
 except Exception as e:
-    st.error(f"Kutilmagan xatolik yuz berdi: {e}")
+    st.error(f"Xatolik yuz berdi: {e}")
